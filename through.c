@@ -55,7 +55,7 @@ char *pdevice = "merge";
 char *cdevice = "merge"; 
 
 snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-int rate = 16000;
+int rate = 48000;
 int channels = 8;
 int buffer_size = 0;        /* auto */
 int period_size = 0;        /* auto */
@@ -494,33 +494,16 @@ void savebuffer(char* buffer,int r)
 {
     short* samples = (short*) buffer;
     int i;
-    int chans = 4;
     for (i=0;i<r;i++)
     {
         int chn=0;
         for (chn=0;chn<channels;chn++){
-           codec_buffer[i*chans + chn + save_index]      =  samples[i*chans+chn];
+           codec_buffer[i*channels + chn + save_index]      =  samples[i*channels+chn];
         }
     }
-    save_index += r*chans;
+    save_index += r*channels;
 }
-/***********************
-void savebuffer(int* buffer,int r)
-{
-    int* samples = (int*) buffer;
-    int i;
-    int chans = 4;
-    for (i=0;i<r;i++)
-    {
-        int chn=0;
-        for (chn=0;chn<chans;chn++){
-           codec_buffer[i*chans + chn + save_index]      =  samples[i*chans+chn];
-        }
-    }
-    save_index += r*chans;
-}
-*************************/
- 
+
 void help(void)
 {
     int k;
@@ -738,7 +721,7 @@ int main(int argc, char *argv[])
                 ok = 0;
             else {
                 if (effect){
-                    if (frames_in < 16384  ){
+                    if (frames_in < 8192){
                        savebuffer(buffer,r);
                     }
                 } 
@@ -779,9 +762,10 @@ int main(int argc, char *argv[])
         snd_pcm_hw_free(chandle);
     }
 
-        for(int i=0;i<256;i++){
+/*        for(int i=0;i<256;i++){
            printf("codec_buffer[%d]: %hi\n", i, codec_buffer[i]);
-        }
+        } */
+    
     fptr = fopen("samples.txt","w");
     if(fptr == NULL){
       printf("Error opening file.\n");
