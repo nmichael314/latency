@@ -73,6 +73,25 @@ int save_index = 0;
 int mask = 0x000001FF;
 snd_output_t *output = NULL;
 unsigned int temp;
+
+struct timespec c_start, c_end, p_start, p_end;
+int r_time[512];
+int rtime_index = 0;
+int a_time[512];
+int atime_index = 0;
+int time_mask = 0x1FF;
+int r_flag = 0;
+int w_time[512];
+int wtime_index = 0;
+int w_flag = 0;
+int r_avail[512];
+int ravail_index = 0;
+int ra_flag = 0;
+int w_avail[512];
+int wavail_index = 0;
+int wa_flag = 0;
+int avail_mask = 0x1FF;
+
 FILE *fptr;
  
 int setparams_stream(snd_pcm_t *handle,
@@ -437,13 +456,37 @@ long timediff(snd_timestamp_t t1, snd_timestamp_t t2)
 long readbuf(snd_pcm_t *handle, char *buf, long len, size_t *frames, size_t *max)
 {
     long r;
+    ssize_t a;
     //printf("--readbuf--\n"); 
     if (!block) {
         do {
+           
+               if (ra_flag<16){
+                  a = snd_pcm_avail(handle);
+                  *(r_avail+ravail_index) = a;
+                  ravail_index++;
+                  ravail_index=ravail_index&avail_mask;
+
+                  temp = clock_gettime(CLOCK_REALTIME, &c_end); /* reusing c_end */
+                  *(a_time+atime_index) = (long)(1000000000*(c_end.tv_sec - c_start.tv_sec) + (c_end.tv_nsec - c_start.tv_nsec)); 
+                  atime_index++;
+                  atime_index=atime_index&time_mask;
+              /*  c_start = c_end; */
+                  ra_flag++;
+               }
+
             r = snd_pcm_readi(handle, buf, len);
-            *(length+len_index) = r;
+            if (r_flag<16){
+                *(length+len_index) = r;
                 len_index++;
                 len_index=len_index&mask;
+                temp = clock_gettime(CLOCK_REALTIME, &c_end);
+                *(r_time+rtime_index) = (long)(1000000000*(c_end.tv_sec - c_start.tv_sec) + (c_end.tv_nsec - c_start.tv_nsec)); 
+                rtime_index++;
+                rtime_index=rtime_index&time_mask;
+              /*  c_start = c_end; */
+                r_flag++;
+            }
         } while (r == -EAGAIN);
         if (r > 0) {
             *frames += r;
@@ -472,11 +515,29 @@ long readbuf(snd_pcm_t *handle, char *buf, long len, size_t *frames, size_t *max
 long writebuf(snd_pcm_t *handle, char *buf, long len, size_t *frames)
 {
     long r;
+    ssize_t a;
     int frame_bytes = (snd_pcm_format_width(format) / 8) * channels;
  
     //printf("--writebuf--\n"); 
     while (len > 0) {
+       if (wa_flag<16){
+           a = snd_pcm_avail(handle);
+           *(w_avail+wavail_index) = a;
+           wavail_index++;
+           wavail_index=wavail_index&avail_mask;
+           wa_flag++;
+        }
+
         r = snd_pcm_writei(handle, buf, len);
+        if (w_flag<16){
+           temp = clock_gettime(CLOCK_REALTIME, &p_end);
+           *(w_time+wtime_index) = (long)(1000000000*(p_end.tv_sec - p_start.tv_sec) + (p_end.tv_nsec - p_start.tv_nsec)); 
+           wtime_index++;
+           wtime_index=wtime_index&time_mask;
+       /*    p_start = p_end; */
+           w_flag++;
+        }
+
         if (r == -EAGAIN)
             continue;
      //   printf("write = %li\n", r);
@@ -686,6 +747,7 @@ int main(int argc, char *argv[])
             fprintf(stderr, "silence error\n");
             break;
         }
+        clock_gettime(CLOCK_REALTIME,&p_start);
         if (writebuf(phandle, buffer, latency, &frames_out) < 0) {
             fprintf(stderr, "write error\n");
             break;
@@ -701,6 +763,7 @@ int main(int argc, char *argv[])
         }
         gettimestamp(phandle, &p_tstamp);
         gettimestamp(chandle, &c_tstamp);
+        clock_gettime(CLOCK_REALTIME,&c_start);
 #if 0
         printf("Playback:\n");
         showstat(phandle, frames_out);
@@ -772,6 +835,57 @@ int main(int argc, char *argv[])
     }
     for(int i=0; i< 65536; i++){
         fprintf(fptr,"%hi\n",codec_buffer[i]);
+    } 
+    fclose(fptr);
+
+    fptr = fopen("r_times.txt","w");
+    if(fptr == NULL){
+      printf("Error opening file.\n");
+    }
+    for(int i=0; i< 512; i++){
+        fprintf(fptr,"%fms\n",(float)r_time[i]/1000000);
+    } 
+    fclose(fptr);
+
+    fptr = fopen("r_avail.txt","w");
+    if(fptr == NULL){
+      printf("Error opening file.\n");
+    }
+    for(int i=0; i< 512; i++){
+        fprintf(fptr,"%d\n",r_avail[i]);
+    } 
+    fclose(fptr);
+
+    fptr = fopen("w_avail.txt","w");
+    if(fptr == NULL){
+      printf("Error opening file.\n");
+    }
+    for(int i=0; i< 512; i++){
+        fprintf(fptr,"%d\n",w_avail[i]);
+    } 
+    fclose(fptr);
+
+
+    fptr = fopen("w_times.txt","w");
+    if(fptr == NULL){
+      printf("Error opening file.\n");
+    }
+    for(int i=0; i< 512; i++){
+        fprintf(fptr,"%fms\n",(float)w_time[i]/1000000);
+    } 
+    fclose(fptr);
+
+
+    fptr = fopen("consolidate.txt","w");
+    if(fptr == NULL){
+      printf("Error opening file.\n");
+    }
+    fprintf(fptr,"   avail\t|  readi\t|  writei\t\n");
+    fprintf(fptr,"---------------------------------------------\n");
+    fprintf(fptr,"  ------\t| ----------\t|   %4.2fms\n",(float)w_time[0]/1000000);
+    fprintf(fptr,"  ------\t| ----------\t|   %4.2fms\n",(float)w_time[1]/1000000);
+    for(int i=0; i< 500; i++){
+        fprintf(fptr," %d@%4.2fms\t|  %d@%4.2fms\t|   %4.2fms\n",r_avail[i],(float)a_time[i]/1000000,length[i],(float)r_time[i]/1000000,(float)w_time[i+2]/1000000);
     } 
     fclose(fptr);
 
