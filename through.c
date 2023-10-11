@@ -55,7 +55,7 @@ char *pdevice = "merge";
 char *cdevice = "merge"; 
 
 snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-int rate = 48000;
+int rate = 16000;
 int channels = 8;
 int buffer_size = 0;        /* auto */
 int period_size = 0;        /* auto */
@@ -880,12 +880,12 @@ int main(int argc, char *argv[])
     if(fptr == NULL){
       printf("Error opening file.\n");
     }
-    fprintf(fptr,"   avail\t|  readi\t|  writei\t\n");
-    fprintf(fptr,"---------------------------------------------\n");
-    fprintf(fptr,"  ------\t| ----------\t|   %4.2fms\n",(float)w_time[0]/1000000);
-    fprintf(fptr,"  ------\t| ----------\t|   %4.2fms\n",(float)w_time[1]/1000000);
+    fprintf(fptr,"   avail\t|  readi\t|  w_avail\t|  writei\t\n");
+    fprintf(fptr,"--------------------------------------------------------\n");
+    fprintf(fptr,"  ------\t| ----------\t|     %d\t|   %4.2fms\n",w_avail[0],(float)w_time[0]/1000000);
+    fprintf(fptr,"  ------\t| ----------\t|     %d\t|   %4.2fms\n",w_avail[1],(float)w_time[1]/1000000);
     for(int i=0; i< 500; i++){
-        fprintf(fptr," %d@%4.2fms\t|  %d@%4.2fms\t|   %4.2fms\n",r_avail[i],(float)a_time[i]/1000000,length[i],(float)r_time[i]/1000000,(float)w_time[i+2]/1000000);
+        fprintf(fptr," %d@%4.2fms\t|  %d@%4.2fms\t|     %3d\t|   %4.2fms\n",r_avail[i],(float)a_time[i]/1000000,length[i],(float)r_time[i]/1000000,w_avail[i+2],(float)w_time[i+2]/1000000);
     } 
     fclose(fptr);
 
